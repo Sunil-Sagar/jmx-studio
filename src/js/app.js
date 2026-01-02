@@ -1,6 +1,6 @@
 // Main Application Controller
 import { parseJMX, extractThreadGroups, extractGlobalVariables } from './core/jmxParser.js';
-import { applyMasterScale as applyScaling, downloadJMX as downloadModifiedJMX, updateRampTimeInXML, updateLoopCountInXML, updateDurationInXML } from './core/jmxModifier.js';
+import { applyMasterScale as applyScaling, downloadJMX, updateRampTimeInXML, updateLoopCountInXML, updateDurationInXML } from './core/jmxModifier.js';
 import { renderVariablesTable, addVariable as addVar, updateVariable as updateVar, deleteVariable as deleteVar, findAndReplace as findReplace, previewFindReplace, updateUDVGroupName } from './features/variablesManager.js';
 import { renderSamplersTable, deleteSampler as delSampler, renameSampler as renameSamp, renameAllSamplers, bulkDeleteSamplers as bulkDelSamplers, filterSamplers } from './features/samplerManager.js';
 import { renderWorkloadTable, renderScalingTable, calculateUsersOnly, calculateTPSForThreadGroup as calcTPSForTG, calculatePacingForThreadGroup as calcPacingForTG, applyCalculatedValues, calculateScalingFactor, applyScaledValues, calculateAndApplyIndividualTPS } from './features/workloadCalculator.js';
@@ -130,7 +130,7 @@ window.switchTab = function(tabName) {
 };
 
 // Capture the imported function reference before creating window function
-const downloadJMXImpl = downloadModifiedJMX;
+const downloadJMXImpl = downloadJMX;
 
 // Download JMX
 window.downloadJMX = function() {
