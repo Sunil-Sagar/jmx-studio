@@ -1,0 +1,16 @@
+{
+  "name": "jmx-orchestrator-pro",
+  "version": "4.0.0",
+  "description": "JMeter test configuration tool for performance testers worldwide",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "keywords": [
+    "jmeter",
+    "performance-testing",
+    "load-testing",
+    "test-orchestration"
+  ],
+  "author": "Performance Testing Community",
+  "license": "MIT"
+}

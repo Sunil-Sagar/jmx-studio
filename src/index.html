@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JMX Studio - Enhanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">JMX Studio</h1>
+                    <p class="text-sm text-gray-600">Unified JMeter 5.6.3 Configuration Tool</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div id="modeIndicator" class="hidden px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-semibold">
+                        <span class="text-gray-400 mr-2">Mode:</span>
+                        <span id="currentMode">Iteration</span>
+                    </div>
+                    <span class="text-xs text-gray-500">v4.0.0</span>
+                    <div class="flex items-center gap-2">
+                        <div id="statusDot" class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Online"></div>
+                        <span id="statusText" class="text-xs font-medium text-green-600">Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6 pb-20">
+        <!-- File Upload Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Upload JMX File</label>
+                    <input type="file" id="fileInput" accept=".jmx,.xml,text/xml,application/xml" 
+                           class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-l-lg file:border-0 file:bg-black file:text-white hover:file:bg-gray-800"
+                           aria-label="Choose JMX file to upload">
+                </div>
+                <button id="downloadBtn" disabled onclick="downloadJMX()" 
+                        class="mt-6 px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
+                    💾 Download
+                </button>
+            </div>
+        </div>
+
+        <!-- Upload Prompt -->
+        <div id="uploadPrompt" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            <h3 class="text-xl font-semibold text-gray-700 mb-2">Upload JMX File to Begin</h3>
+            <p class="text-gray-500">Select a JMeter test plan to configure samplers, variables, CSV data, timers, and workload</p>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div id="mainContent" style="display: none;">
+            <!-- Tab Navigation -->
+            <div class="mb-6 border-b border-gray-200">
+                <nav class="flex gap-8">
+                    <button onclick="switchTab('master')" id="tab-master" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900 tab-active">Master Control</button>
+                    <button onclick="switchTab('samplers')" id="tab-samplers" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900">Samplers</button>
+                    <button onclick="switchTab('variables')" id="tab-variables" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900">Variables</button>
+                    <button onclick="switchTab('csv')" id="tab-csv" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900">CSV Data</button>
+                    <button onclick="switchTab('timers')" id="tab-timers" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900">Timers</button>
+                    <button onclick="switchTab('workload')" id="tab-workload" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900">Workload Calc</button>
+                    <button onclick="switchTab('threadgroups')" id="tab-threadgroups" class="pb-3 px-1 text-sm font-medium text-gray-700 hover:text-gray-900">Thread Groups</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content Areas -->
+            <div id="content-master" class="tab-content">
+                <!-- Master Scenario Scaling -->
+                <div class="bg-white rounded-lg shadow-sm border-2 border-black p-6 mb-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">🎯 Master Scenario Scaling</h3>
+                    <p class="text-sm text-gray-600 mb-4">Scale entire scenario - affects ALL thread groups and TPS</p>
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Scale Percentage</label>
+                            <input type="number" id="masterScale" value="100" min="1" max="1000" step="1" 
+                                onchange="updatePerformanceSummary()"
+                                class="w-32 px-3 py-2 border border-gray-300 rounded text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <button onclick="applyMasterScale()" class="px-6 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors mt-6">Apply to All</button>
+                    </div>
+                    <!-- Quick Scale Buttons -->
+                    <div class="grid grid-cols-4 gap-3">
+                        <button onclick="setMasterScale(150)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 text-sm font-medium">150% → ×1.5</button>
+                        <button onclick="setMasterScale(200)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 text-sm font-medium">200% → ×2</button>
+                        <button onclick="setMasterScale(50)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 text-sm font-medium">50% → ×0.5</button>
+                        <button onclick="setMasterScale(75)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 text-sm font-medium">75% → ×0.75</button>
+                    </div>
+                </div>
+
+                <!-- Slave/Node Scaling -->
+                <div class="bg-white rounded-lg shadow-sm border border-blue-300 p-6 mb-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">🖥️ Slave/Node Scaling</h3>
+                    <div class="flex items-center gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Number of Slaves</label>
+                            <input type="number" id="slaveCount" value="1" min="1" max="100" step="1" 
+                                onchange="updatePerformanceSummary()"
+                                class="w-24 px-3 py-2 border border-gray-300 rounded text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <p class="text-sm text-gray-600 mt-6">Each thread group multiplied by this number</p>
+                    </div>
+                </div>
+
+                <!-- Performance Summary -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">📊 Performance Summary</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Active Groups</div>
+                            <div class="text-2xl font-bold text-gray-900" id="activeGroups">0 / 0</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Original Users</div>
+                            <div class="text-2xl font-bold text-blue-600" id="originalUsers">0</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Scaled Users</div>
+                            <div class="text-2xl font-bold text-green-600" id="scaledUsers">0</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Original TPS</div>
+                            <div class="text-2xl font-bold text-blue-600" id="originalTPS">104.22</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Scaled TPS</div>
+                            <div class="text-2xl font-bold text-green-600" id="scaledTPS">104.22</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-samplers" class="tab-content" style="display: none;">
+                <!-- Search & Bulk Actions -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6 p-6">
+                    <div class="flex gap-4 items-end">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Search Samplers</label>
+                            <input type="text" id="samplerSearch" placeholder="Search by name or URL..." 
+                                oninput="filterSamplers()"
+                                class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <button onclick="bulkDeleteSamplers()" 
+                            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-medium">
+                            Delete Selected
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Samplers Table -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">📡 HTTP Samplers</h3>
+                                <p class="text-sm text-gray-600 mt-1">Clean up your recorded script by removing unwanted requests</p>
+                            </div>
+                            <button onclick="renameAllSamplersAction()" 
+                                class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors">
+                                Rename All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">
+                                        <input type="checkbox" id="selectAllSamplers" onchange="toggleAllSamplers()" 
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">#</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Sampler Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Method</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">URL/Path</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="samplersTableBody" class="divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-gray-500">No samplers found</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-variables" class="tab-content" style="display: none;">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-gray-900">🔧 User Defined Variables</h3>
+                            <button onclick="showAddVariableModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium">
+                                + Add Variable
+                            </button>
+                        </div>
+                        <!-- UDV Group Name -->
+                        <div class="flex items-center gap-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">UDV Group Name</label>
+                                <input type="text" id="udvGroupName" value="User Defined Variables" placeholder="User Defined Variables" 
+                                    onfocus="if(this.value === 'User Defined Variables') this.value = ''" 
+                                    onblur="if(this.value === '') this.value = 'User Defined Variables'"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <button onclick="updateUDVGroupName()" class="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium">
+                                Update Name
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">#</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Variable Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Variable Value</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="variablesTableBody" class="divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="4" class="px-4 py-8 text-center text-gray-500">No variables found</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Find & Replace Section -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-900">🔍 Find & Replace</h3>
+                        <p class="text-sm text-gray-600 mt-1">Search and replace text across all variable values</p>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Find Text</label>
+                                <input type="text" id="findText" placeholder="e.g., dev-server" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Replace With</label>
+                                <input type="text" id="replaceText" placeholder="e.g., prod-server" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="findAndReplaceVariables()" 
+                                class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium">
+                                Replace All
+                            </button>
+                            <button onclick="previewFindReplace()" 
+                                class="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors font-medium">
+                                Preview Changes
+                            </button>
+                        </div>
+                        <div id="findReplaceResult" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded hidden">
+                            <p class="text-sm text-blue-800"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-csv" class="tab-content" style="display: none;">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-900">📁 CSV Data Manager</h3>
+                        <p class="text-sm text-gray-600 mt-1">Configure CSV Data Sets with LoadRunner-style variants</p>
+                    </div>
+                    <div class="p-6">
+                        <!-- Add CSV Config Section -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                            <h4 class="text-sm font-semibold text-gray-800 mb-3">Add CSV Data Set Config</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Config Type</label>
+                                    <select id="csvType" onchange="updateCSVTypeFields()" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="CSVDataSet">Standard CSV Data Set</option>
+                                        <option value="RandomCSVDataSet">Random CSV Data Set</option>
+                                        <option value="ExtendedCSVDataSet">Extended CSV Data Set</option>
+                                        <option value="UniqueCSVDataSet">Unique CSV Data Set</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Config Name</label>
+                                    <input type="text" id="csvName" placeholder="e.g., User Credentials" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">File Path</label>
+                                    <input type="text" id="csvFilePath" placeholder="e.g., data/users.csv" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">File Encoding</label>
+                                    <input type="text" id="csvFileEncoding" value="UTF-8" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Variable Names (comma-separated)</label>
+                                    <input type="text" id="csvVariables" placeholder="e.g., username,password" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Delimiter</label>
+                                    <input type="text" id="csvDelimiter" value="," maxlength="1" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Sharing Mode</label>
+                                    <select id="csvShareMode" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="shareMode.all">All threads</option>
+                                        <option value="shareMode.group">Current thread group</option>
+                                        <option value="shareMode.thread">Current thread</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Extended CSV specific fields -->
+                                <div id="extendedSelectRow" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Row</label>
+                                    <select id="csvSelectRow" onchange="updateExtendedFields()" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="Sequential">Sequential</option>
+                                        <option value="Random">Random</option>
+                                        <option value="Unique">Unique</option>
+                                    </select>
+                                </div>
+                                <div id="extendedUpdateValues" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Update Values</label>
+                                    <select id="csvUpdateValues" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="Each iteration">Each iteration</option>
+                                        <option value="Once">Once</option>
+                                    </select>
+                                </div>
+                                <div id="extendedOutOfValues" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">When out of Values</label>
+                                    <select id="csvOutOfValues" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="Continue Cyclic">Continue Cyclic</option>
+                                        <option value="Continue with last value">Continue with last value</option>
+                                        <option value="Abort thread">Abort thread</option>
+                                    </select>
+                                </div>
+                                <div id="extendedAllocateValues" class="hidden col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Allocate values to thread</label>
+                                    <div class="space-y-2">
+                                        <div class="flex items-center">
+                                            <input type="radio" id="csvAllocateAuto" name="csvAllocateMode" value="auto" checked
+                                                class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                                            <label for="csvAllocateAuto" class="ml-2 text-sm text-gray-700">Automatically allocate block for threads</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input type="radio" id="csvAllocateManual" name="csvAllocateMode" value="manual"
+                                                class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                                            <label for="csvAllocateManual" class="ml-2 text-sm text-gray-700">Allocate</label>
+                                            <input type="number" id="csvAllocateCount" value="1" min="1" 
+                                                class="ml-2 w-20 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            <span class="ml-2 text-sm text-gray-700">values for each thread</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Unique CSV specific fields -->
+                                <div id="uniqueThreadGroup" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Thread Group</label>
+                                    <input type="text" id="csvTargetThreadGroup" placeholder="Thread Group A" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div id="uniqueBlockSize" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Block Size for Each Thread</label>
+                                    <input type="number" id="csvBlockSize" value="1" min="1" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                <!-- Standard/Unique CSV checkboxes -->
+                                <div id="recycleCheck" class="flex items-center">
+                                    <input type="checkbox" id="csvRecycle" checked 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvRecycle" class="ml-2 text-sm text-gray-700">Recycle on EOF</label>
+                                </div>
+                                <div id="stopThreadCheck" class="flex items-center">
+                                    <input type="checkbox" id="csvStopThread" 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvStopThread" class="ml-2 text-sm text-gray-700">Stop thread on EOF</label>
+                                </div>
+                                <div id="ignoreFirstLineCheck" class="flex items-center">
+                                    <input type="checkbox" id="csvIgnoreFirstLine" 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
+                                    <label for="csvIgnoreFirstLine" class="ml-2 text-sm text-gray-700">Ignore first line</label>
+                                </div>
+                                <div id="allowQuotedCheck" class="flex items-center">
+                                    <input type="checkbox" id="csvAllowQuoted" 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvAllowQuoted" class="ml-2 text-sm text-gray-700">Allow quoted data</label>
+                                </div>
+                                
+                                <!-- Random CSV specific checkboxes -->
+                                <div id="randomOrderCheck" class="flex items-center hidden">
+                                    <input type="checkbox" id="csvRandomOrder" checked 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvRandomOrder" class="ml-2 text-sm text-gray-700">Random order</label>
+                                </div>
+                                <div id="rewindCheck" class="flex items-center hidden">
+                                    <input type="checkbox" id="csvRewind" checked 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvRewind" class="ml-2 text-sm text-gray-700">Rewind on end of list</label>
+                                </div>
+                                <div id="headerCheck" class="flex items-center hidden">
+                                    <input type="checkbox" id="csvFirstLineHeader" 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvFirstLineHeader" class="ml-2 text-sm text-gray-700">First line is CSV header</label>
+                                </div>
+                                <div id="independentCheck" class="flex items-center hidden">
+                                    <input type="checkbox" id="csvIndependentList" 
+                                        class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <label for="csvIndependentList" class="ml-2 text-sm text-gray-700">Independent list per thread</label>
+                                </div>
+                            </div>
+                            <button onclick="addCSVConfig()" 
+                                class="mt-4 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium">
+                                Add CSV Config
+                            </button>
+                        </div>
+
+                        <!-- CSV Configs Table -->
+                        <div class="overflow-x-auto">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-sm font-semibold text-gray-800">Existing CSV Configs</h4>
+                                <span id="csvCount" class="text-sm text-gray-600">0 configs</span>
+                            </div>
+                            <div id="csvTableContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-timers" class="tab-content" style="display: none;">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-900">⏱️ Timer Manager</h3>
+                        <p class="text-sm text-gray-600 mt-1">Add think time delays for realistic user behavior simulation</p>
+                    </div>
+                    <div class="p-6">
+                        <!-- Add Timer Section -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                            <h4 class="text-sm font-semibold text-gray-800 mb-3">Add New Timer</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Thread Group</label>
+                                    <select id="timerThreadGroup" onchange="updateTimerSamplerList()" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="">Select Thread Group</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Sampler</label>
+                                    <select id="timerSampler" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="">Select Sampler (or leave empty for all)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Timer Type</label>
+                                    <select id="timerType" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="UniformRandomTimer">Uniform Random Timer</option>
+                                        <option value="ConstantTimer">Constant Timer</option>
+                                        <option value="GaussianRandomTimer">Gaussian Random Timer</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Timer Name</label>
+                                    <input type="text" id="timerName" placeholder="e.g., Think Time 3s" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Delay (ms)</label>
+                                    <input type="number" id="timerDelay" value="3000" min="0" step="100"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                            </div>
+                            <div id="timerAdditionalOptions" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Random Delay Maximum (ms)</label>
+                                    <input type="number" id="timerRandomDelay" value="1000" min="0" step="100"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Deviation (for Gaussian, ms)</label>
+                                    <input type="number" id="timerDeviation" value="500" min="0" step="100"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-4">
+                                <button onclick="addTimer()" 
+                                    class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium">
+                                    Add Timer
+                                </button>
+                                <button onclick="showBulkAddModal()" 
+                                    class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium">
+                                    Bulk Add Think Time to All Samplers
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Timers Table -->
+                        <div class="overflow-x-auto">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-sm font-semibold text-gray-800">Existing Timers</h4>
+                                <span id="timerCount" class="text-sm text-gray-600">0 timers</span>
+                            </div>
+                            <div id="timersTableContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-workload" class="tab-content" style="display: none;">
+                <!-- Mode Selector -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <div class="p-6">
+                        <div class="flex gap-4 mb-4">
+                            <button onclick="switchWorkloadMode('scaling')" id="btn-scaling-mode" 
+                                class="flex-1 px-6 py-3 text-sm font-medium rounded-lg transition-colors bg-blue-600 text-white">
+                                🎯 TPS Scaling Calculator
+                            </button>
+                            <button onclick="switchWorkloadMode('littles')" id="btn-littles-mode"
+                                class="flex-1 px-6 py-3 text-sm font-medium rounded-lg transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300">
+                                📐 Little's Law Calculator
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TPS Scaling Calculator -->
+                <div id="scaling-calculator" class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-900">🎯 TPS Scaling Calculator</h3>
+                        <p class="text-sm text-gray-600 mt-1">Quick proportional scaling based on target TPS</p>
+                    </div>
+                    <div class="p-6">
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                            <p class="text-sm text-green-800 font-medium mb-2">📊 Proportional Scaling Formula</p>
+                            <p class="text-xs text-green-700 mb-2">Scaling Factor = Target TPS / Current TPS</p>
+                            <p class="text-xs text-green-700 mb-2">New Users = Current Users × Scaling Factor</p>
+                            <p class="text-xs text-green-600"><strong>When to use:</strong> You have an existing test with known TPS and want to scale to a higher load while maintaining the same distribution across thread groups.</p>
+                        </div>
+
+                        <div id="scalingTableContainer" class="overflow-x-auto"></div>
+                    </div>
+                </div>
+
+                <!-- Little's Law Calculator -->
+                <div id="littles-calculator" class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6" style="display: none;">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-900">📐 Little's Law Calculator</h3>
+                        <p class="text-sm text-gray-600 mt-1">Engineering-precise calculation based on response times</p>
+                    </div>
+                    <div class="p-6">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                            <p class="text-sm text-blue-800 font-medium mb-2">📐 Extended Little's Law Formula</p>
+                            <p class="text-xs text-blue-700 mb-2">U = TPS × (Total RT + Total TT + Pacing)</p>
+                            <p class="text-xs text-blue-700 mb-2">TPS = U / (Total RT + Total TT + Pacing)</p>
+                            <p class="text-xs text-blue-600"><strong>When to use:</strong> You're designing a test from scratch or need precise calculations based on actual response times, think times, and pacing for accurate system capacity analysis.</p>
+                        </div>
+
+                        <div id="workloadTableContainer" class="overflow-x-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-threadgroups" class="tab-content" style="display: none;">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-900">📋 Thread Groups</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Name</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Users</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Ramp-Up <span class="normal-case">(secs)</span></th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Loop Count</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Duration <span class="normal-case">(secs)</span></th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="threadGroupsTableBody" class="divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-black text-white px-6 py-3 rounded-lg shadow-lg transform transition-transform duration-300 translate-y-20 opacity-0" style="z-index: 1000;">
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Add Variable Modal -->
+    <div id="addVariableModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]" style="display: none;">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Add New Variable</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Variable Name</label>
+                <input type="text" id="newVarName" placeholder="e.g., hostname" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Variable Value</label>
+                <input type="text" id="newVarValue" placeholder="e.g., example.com" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeAddVariableModal()" 
+                    class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="confirmAddVariable()" 
+                    class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
+                    Add Variable
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Watermark -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between text-xs text-gray-600">
+                <div class="flex items-center gap-2">
+                    <span class="font-medium text-gray-900">Developed by:</span>
+                    <span class="font-semibold text-black">Sunil Sagar</span>
+                    <span class="text-gray-400">|</span>
+                    <span class="font-medium">Deloitte Consulting LLP</span>
+                </div>
+                <div class="text-gray-500">
+                    © 2025 All Rights Reserved
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Load JavaScript Modules -->
+    <script type="module" src="js/core/jmxParser.js"></script>
+    <script type="module" src="js/core/jmxModifier.js"></script>
+    <script type="module" src="js/features/samplerManager.js"></script>
+    <script type="module" src="js/features/variablesManager.js"></script>
+    <script type="module" src="js/features/csvManager.js"></script>
+    <script type="module" src="js/features/timerManager.js"></script>
+    <script type="module" src="js/features/workloadCalculator.js"></script>
+    <script type="module" src="js/utils/calculator.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
