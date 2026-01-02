@@ -175,7 +175,7 @@ export function updatePerformanceSummary() {
 export function applyMasterScale() {
     const jmxDoc = window.appState.jmxDocument;
     if (!jmxDoc) {
-        showToast('No JMX file loaded', 'error');
+        window.showToast('No JMX file loaded', 'error');
         return { success: false, error: 'No JMX file loaded' };
     }
 
@@ -183,7 +183,7 @@ export function applyMasterScale() {
     const scaleMultiplier = masterScale / 100;
 
     if (scaleMultiplier <= 0) {
-        showToast('Scale percentage must be greater than 0', 'error');
+        window.showToast('Scale percentage must be greater than 0', 'error');
         return { success: false, error: 'Invalid scale percentage' };
     }
 
@@ -248,7 +248,7 @@ export function applyMasterScale() {
     
     } catch (error) {
         console.error('Error in applyMasterScale:', error);
-        showToast('Error applying scaling: ' + error.message, 'error');
+        window.showToast('Error applying scaling: ' + error.message, 'error');
         return { success: false, error: error.message };
     }
 }

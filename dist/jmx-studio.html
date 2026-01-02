@@ -2689,7 +2689,7 @@ function updatePerformanceSummary() {
 function applyMasterScale() {
     const jmxDoc = window.appState.jmxDocument;
     if (!jmxDoc) {
-        showToast('No JMX file loaded', 'error');
+        window.showToast('No JMX file loaded', 'error');
         return { success: false, error: 'No JMX file loaded' };
     }
 
@@ -2697,7 +2697,7 @@ function applyMasterScale() {
     const scaleMultiplier = masterScale / 100;
 
     if (scaleMultiplier <= 0) {
-        showToast('Scale percentage must be greater than 0', 'error');
+        window.showToast('Scale percentage must be greater than 0', 'error');
         return { success: false, error: 'Invalid scale percentage' };
     }
 
@@ -2762,7 +2762,7 @@ function applyMasterScale() {
     
     } catch (error) {
         console.error('Error in applyMasterScale:', error);
-        showToast('Error applying scaling: ' + error.message, 'error');
+        window.showToast('Error applying scaling: ' + error.message, 'error');
         return { success: false, error: error.message };
     }
 }
@@ -3737,7 +3737,7 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
     // Check file size (Edge has lower memory limits)
     const maxSize = 10 * 1024 * 1024; // 10MB limit for safety
     if (file.size > maxSize) {
-        showToast('File too large. Maximum size: 10MB', 'error');
+        window.showToast('File too large. Maximum size: 10MB', 'error');
         return;
     }
     
@@ -3746,7 +3746,7 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
     // Add error handler for Edge compatibility
     reader.onerror = function(error) {
         console.error('FileReader error:', error);
-        showToast('Error reading file: ' + error.message, 'error');
+        window.showToast('Error reading file: ' + error.message, 'error');
     };
     reader.onload = function(event) {
         try {
@@ -3756,7 +3756,7 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
             const result = parseJMX(event.target.result);
             
             if (result.error) {
-                showToast(result.error, 'error');
+                window.showToast(result.error, 'error');
                 return;
             }
             
@@ -3805,13 +3805,16 @@ window.switchTab = function(tabName) {
     document.getElementById(`tab-${tabName}`).classList.add('tab-active');
 };
 
+// Capture the imported function reference before creating window function
+const downloadJMXImpl = downloadModifiedJMX;
+
 // Download JMX
 window.downloadJMX = function() {
-    const result = downloadModifiedJMX();
+    const result = downloadJMXImpl();
     if (result.success) {
-        showToast('JMX downloaded!', 'success');
+        window.showToast('JMX downloaded!', 'success');
     } else {
-        showToast('Download failed: ' + result.error, 'error');
+        window.showToast('Download failed: ' + result.error, 'error');
     }
 };
 
