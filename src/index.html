@@ -41,6 +41,7 @@
                     <input type="file" id="fileInput" accept=".jmx,.xml,text/xml,application/xml" 
                            class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-l-lg file:border-0 file:bg-black file:text-white hover:file:bg-gray-800"
                            aria-label="Choose JMX file to upload">
+                    <p class="text-xs text-orange-600 mt-1">⚠️ Edge users: Use a local web server (e.g., Live Server) or Chrome for best experience</p>
                 </div>
                 <button id="downloadBtn" disabled onclick="downloadJMX()" 
                         class="mt-6 px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
@@ -85,6 +86,11 @@
                             <input type="number" id="masterScale" value="100" min="1" max="1000" step="1" 
                                 onchange="updatePerformanceSummary()"
                                 class="w-32 px-3 py-2 border border-gray-300 rounded text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div class="flex-1">
+                            <span id="scalingAppliedBadge" class="hidden inline-flex items-center px-4 py-2 bg-green-100 text-green-800 text-sm font-semibold rounded-lg border-2 border-green-600">
+                                ✓ Scaling Applied - Ready to Download
+                            </span>
                         </div>
                         <button onclick="applyMasterScale()" class="px-6 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors mt-6">Apply to All</button>
                     </div>

@@ -58,9 +58,25 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     
+    // Check file size (Edge has lower memory limits)
+    const maxSize = 10 * 1024 * 1024; // 10MB limit for safety
+    if (file.size > maxSize) {
+        showToast('File too large. Maximum size: 10MB', 'error');
+        return;
+    }
+    
     const reader = new FileReader();
+    
+    // Add error handler for Edge compatibility
+    reader.onerror = function(error) {
+        console.error('FileReader error:', error);
+        showToast('Error reading file: ' + error.message, 'error');
+    };
     reader.onload = function(event) {
         try {
+            // Store raw XML data FIRST
+            window.appState.jmxData = event.target.result;
+            
             const result = parseJMX(event.target.result);
             
             if (result.error) {
@@ -71,6 +87,9 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
             // Update global state
             window.appState = { ...window.appState, ...result };
             
+            // Re-store jmxData (important!)
+            window.appState.jmxData = event.target.result;
+            
             // Store original thread group counts for master scaling
             window.appState.originalThreadGroupCounts = result.threadGroupData.map(tg => tg.count);
             
@@ -79,69 +98,16 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
             document.getElementById('mainContent').style.display = 'block';
             document.getElementById('downloadBtn').disabled = false;
             
-            // Render initial view
-            try {
-                renderThreadGroupsTable();
-                console.log('✓ Thread groups rendered');
-            } catch (err) {
-                console.error('Error rendering thread groups:', err);
-            }
-            
-            try {
-                renderVariablesTable();
-                console.log('✓ Variables rendered');
-            } catch (err) {
-                console.error('Error rendering variables:', err);
-            }
-            
-            try {
-                renderSamplersTable();
-                console.log('✓ Samplers rendered');
-            } catch (err) {
-                console.error('Error rendering samplers:', err);
-            }
-            
-            try {
-                renderTimersTable();
-                console.log('✓ Timers rendered');
-            } catch (err) {
-                console.error('Error rendering timers:', err);
-            }
-            
-            try {
-                populateTimerDropdowns();
-                console.log('✓ Timer dropdowns populated');
-            } catch (err) {
-                console.error('Error populating timer dropdowns:', err);
-            }
-            
-            try {
-                renderCSVTable();
-                console.log('✓ CSV rendered');
-            } catch (err) {
-                console.error('Error rendering CSV:', err);
-            }
-            
-            try {
-                renderScalingTable();
-                console.log('✓ Scaling table rendered');
-            } catch (err) {
-                console.error('Error rendering scaling table:', err);
-            }
-            
-            try {
-                renderWorkloadTable();
-                console.log('✓ Workload table rendered');
-            } catch (err) {
-                console.error('Error rendering workload table:', err);
-            }
-            
-            try {
-                updatePerformanceSummary();
-                console.log('✓ Performance summary updated');
-            } catch (err) {
-                console.error('Error updating performance summary:', err);
-            }
+            // Render all tables
+            renderThreadGroupsTable();
+            renderVariablesTable();
+            renderSamplersTable();
+            renderTimersTable();
+            populateTimerDropdowns();
+            renderCSVTable();
+            renderScalingTable();
+            renderWorkloadTable();
+            updatePerformanceSummary();
             
             showToast('JMX loaded successfully!', 'success');
         } catch (error) {
@@ -989,15 +955,31 @@ window.updatePerformanceSummary = updatePerformanceSummary;
 window.renderScalingTable = renderScalingTable;
 window.renderWorkloadTable = renderWorkloadTable;
 window.setMasterScale = setMasterScale;
+
+// Capture the imported function reference before creating window function
+const applyMasterScaleImpl = applyMasterScale;
+
 window.applyMasterScale = function() {
-    const result = applyMasterScaling();
+    const result = applyMasterScaleImpl();
     if (!result.success) {
-        showToast(result.error, 'error');
+        window.showToast(result.error, 'error');
         return;
     }
+    
+    // Show visual confirmation badge
+    const badge = document.getElementById('scalingAppliedBadge');
+    if (badge) {
+        badge.style.display = 'block';
+        // Hide after 5 seconds
+        setTimeout(() => {
+            badge.style.display = 'none';
+        }, 5000);
+    }
+    
+    // Re-render Thread Groups table with updated counts
     renderThreadGroupsTable();
     updatePerformanceSummary();
-    showToast(`Applied master scale successfully!`, 'success');
+    window.showToast(`Applied ${document.getElementById('masterScale').value}% scaling`, 'success');
 };
 
 // Workload Calculator Mode Switcher

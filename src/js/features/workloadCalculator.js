@@ -51,15 +51,8 @@ function getPerformanceSummaryTPS() {
         }
     }
 
-    // If no timers, estimate: TPS = Users / 1 second iteration time
-    if (totalTPS === 0) {
-        const threadGroups = window.appState.threadGroupData || [];
-        let totalUsers = 0;
-        threadGroups.forEach(tg => totalUsers += tg.count);
-        totalTPS = totalUsers / 1; // Same as Performance Summary
-    }
-
-    return totalTPS;
+    // If no timers found, return null to display N/A
+    return totalTPS > 0 ? totalTPS : null;
 }
 
 export function renderScalingTable() {
@@ -78,6 +71,7 @@ export function renderScalingTable() {
     
     // Get total TPS from Performance Summary method
     const totalCurrentTPS = getPerformanceSummaryTPS();
+    const hasTPS = totalCurrentTPS !== null && totalCurrentTPS > 0;
     
     // Calculate total users
     let totalCurrentUsers = 0;
@@ -91,13 +85,13 @@ export function renderScalingTable() {
             <div class="grid grid-cols-3 gap-4 items-center">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Current Total TPS</label>
-                    <div class="text-2xl font-bold text-gray-900">${totalCurrentTPS.toFixed(2)}</div>
+                    <div class="text-2xl font-bold text-gray-900">${hasTPS ? totalCurrentTPS.toFixed(2) : 'N/A'}</div>
                     <div class="text-xs text-gray-500">${totalCurrentUsers} total users</div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Target Total TPS</label>
-                    <input type="number" id="target-total-tps" value="${totalCurrentTPS.toFixed(2)}" min="0.1" step="0.1"
-                        class="w-full px-3 py-2 border border-gray-300 rounded text-center text-lg focus:ring-2 focus:ring-green-500">
+                    <input type="number" id="target-total-tps" value="${hasTPS ? totalCurrentTPS.toFixed(2) : ''}" min="0.1" step="0.1"
+                        class="w-full px-3 py-2 border border-gray-300 rounded text-center text-lg focus:ring-2 focus:ring-green-500" ${!hasTPS ? 'placeholder="No timers found"' : ''}>
                 </div>
                 <div>
                     <button onclick="calculateScalingFactor()" 

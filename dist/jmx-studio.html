@@ -141,6 +141,7 @@ body {
                     <input type="file" id="fileInput" accept=".jmx,.xml,text/xml,application/xml" 
                            class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-l-lg file:border-0 file:bg-black file:text-white hover:file:bg-gray-800"
                            aria-label="Choose JMX file to upload">
+                    <p class="text-xs text-orange-600 mt-1">⚠️ Edge users: Use a local web server (e.g., Live Server) or Chrome for best experience</p>
                 </div>
                 <button id="downloadBtn" disabled onclick="downloadJMX()" 
                         class="mt-6 px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
@@ -185,6 +186,11 @@ body {
                             <input type="number" id="masterScale" value="100" min="1" max="1000" step="1" 
                                 onchange="updatePerformanceSummary()"
                                 class="w-32 px-3 py-2 border border-gray-300 rounded text-center text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div class="flex-1">
+                            <span id="scalingAppliedBadge" class="hidden inline-flex items-center px-4 py-2 bg-green-100 text-green-800 text-sm font-semibold rounded-lg border-2 border-green-600">
+                                ✓ Scaling Applied - Ready to Download
+                            </span>
                         </div>
                         <button onclick="applyMasterScale()" class="px-6 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors mt-6">Apply to All</button>
                     </div>
@@ -2561,18 +2567,17 @@ function calculatePerformanceSummary() {
     // Apply slave multiplier
     scaledUsers *= slaveCount;
 
-    // Calculate TPS (simplified - would need precise throughput controller analysis)
-    // For now, assume TPS scales linearly with users
+    // Calculate TPS (0 if no timers found)
     const originalTPS = calculateTPS();
-    const scaledTPS = originalTPS * scaleMultiplier * slaveCount;
+    const scaledTPS = originalTPS > 0 ? (originalTPS * scaleMultiplier * slaveCount) : 0;
 
     return {
         activeGroups,
         totalGroups,
         originalUsers,
         scaledUsers,
-        originalTPS: originalTPS.toFixed(2),
-        scaledTPS: scaledTPS.toFixed(2)
+        originalTPS: originalTPS > 0 ? originalTPS.toFixed(2) : 'N/A',
+        scaledTPS: scaledTPS > 0 ? scaledTPS.toFixed(2) : 'N/A'
     };
 }
 
@@ -2620,13 +2625,7 @@ function calculateTPS() {
         }
     }
 
-    // If no timers found, estimate based on users and avg response time
-    if (totalTPS === 0) {
-        const summary = calculateBasicMetrics();
-        // Assume 1 second avg response time, users / response time = TPS
-        totalTPS = summary.originalUsers / 1;
-    }
-
+    // If no timers found, return 0 to display N/A
     return totalTPS;
 }
 
@@ -2692,57 +2691,70 @@ function applyMasterScale() {
         return { success: false, error: 'Invalid scale percentage' };
     }
 
-    const threadGroups = jmxDoc.getElementsByTagName('ThreadGroup');
+    const threadGroups = window.appState.threadGroupData || [];
     const originalCounts = window.appState.originalThreadGroupCounts || [];
     let scaledCount = 0;
 
-    // Scale all enabled thread groups
-    for (let i = 0; i < threadGroups.length; i++) {
-        const tg = threadGroups[i];
-        const enabled = tg.getAttribute('enabled') !== 'false';
+    try {
+        // Parse XML once (Edge-safe)
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(window.appState.jmxData, 'text/xml');
         
-        if (enabled) {
-            // Scale num_threads in XML using ORIGINAL count as baseline
-            // Check both intProp and stringProp
-            let propElement = null;
-            const intProps = tg.getElementsByTagName('intProp');
-            for (let j = 0; j < intProps.length; j++) {
-                if (intProps[j].getAttribute('name') === 'ThreadGroup.num_threads') {
-                    propElement = intProps[j];
-                    break;
-                }
-            }
-            if (!propElement) {
-                const stringProps = tg.getElementsByTagName('stringProp');
-                for (let j = 0; j < stringProps.length; j++) {
-                    if (stringProps[j].getAttribute('name') === 'ThreadGroup.num_threads') {
-                        propElement = stringProps[j];
-                        break;
-                    }
-                }
-            }
+        // Check for parse errors (Edge compatibility)
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) {
+            throw new Error('XML parsing failed');
+        }
+        
+        const allThreadGroups = xmlDoc.querySelectorAll('ThreadGroup, com.blazemeter.jmeter.threads.concurrency.ConcurrencyThreadGroup, com.octoperf.jmeter.OctoPerfThreadGroup');
+
+    // Update both XML document and threadGroupData
+    threadGroups.forEach((tg, index) => {
+        if (tg.status) { // Only scale enabled thread groups
+            // Use original count as baseline
+            const originalUsers = originalCounts[index];
+            const scaledUsers = Math.max(1, Math.round(originalUsers * scaleMultiplier));
             
-            if (propElement) {
-                // Use original count from when file was loaded
-                const originalUsers = originalCounts[i] || parseInt(propElement.textContent) || 0;
-                const scaledUsers = Math.max(1, Math.round(originalUsers * scaleMultiplier));
-                propElement.textContent = scaledUsers.toString();
+            // Update threadGroupData in appState directly
+            tg.count = scaledUsers;
+            window.appState.threadGroupData[index].count = scaledUsers;
+            
+            // Update XML element
+            if (index < allThreadGroups.length) {
+                const tgElement = allThreadGroups[index];
                 
-                // Also update in appState.threadGroupData
-                if (window.appState.threadGroupData && window.appState.threadGroupData[i]) {
-                    window.appState.threadGroupData[i].count = scaledUsers;
+                // Update standard ThreadGroup
+                const numThreadsElement = tgElement.querySelector('stringProp[name="ThreadGroup.num_threads"], intProp[name="ThreadGroup.num_threads"]');
+                if (numThreadsElement) {
+                    numThreadsElement.textContent = scaledUsers.toString();
+                }
+                
+                // Update ConcurrencyThreadGroup
+                const targetLevelElement = tgElement.querySelector('stringProp[name="TargetLevel"]');
+                if (targetLevelElement) {
+                    targetLevelElement.textContent = scaledUsers.toString();
                 }
                 
                 scaledCount++;
             }
         }
-    }
+    });
+    
+    // Serialize once after all updates (Edge-safe)
+    const serializer = new XMLSerializer();
+    window.appState.jmxData = serializer.serializeToString(xmlDoc);
+    window.appState.jmxDocument = xmlDoc;
 
     // Update performance summary
     updatePerformanceSummary();
 
-    showToast(`Scaled ${scaledCount} thread groups by ${masterScale}%`, 'success');
     return { success: true, scaledCount };
+    
+    } catch (error) {
+        console.error('Error in applyMasterScale:', error);
+        showToast('Error applying scaling: ' + error.message, 'error');
+        return { success: false, error: error.message };
+    }
 }
 
 function setMasterScale(percentage) {
@@ -2804,15 +2816,8 @@ function getPerformanceSummaryTPS() {
         }
     }
 
-    // If no timers, estimate: TPS = Users / 1 second iteration time
-    if (totalTPS === 0) {
-        const threadGroups = window.appState.threadGroupData || [];
-        let totalUsers = 0;
-        threadGroups.forEach(tg => totalUsers += tg.count);
-        totalTPS = totalUsers / 1; // Same as Performance Summary
-    }
-
-    return totalTPS;
+    // If no timers found, return null to display N/A
+    return totalTPS > 0 ? totalTPS : null;
 }
 
 function renderScalingTable() {
@@ -2831,6 +2836,7 @@ function renderScalingTable() {
     
     // Get total TPS from Performance Summary method
     const totalCurrentTPS = getPerformanceSummaryTPS();
+    const hasTPS = totalCurrentTPS !== null && totalCurrentTPS > 0;
     
     // Calculate total users
     let totalCurrentUsers = 0;
@@ -2844,13 +2850,13 @@ function renderScalingTable() {
             <div class="grid grid-cols-3 gap-4 items-center">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Current Total TPS</label>
-                    <div class="text-2xl font-bold text-gray-900">${totalCurrentTPS.toFixed(2)}</div>
+                    <div class="text-2xl font-bold text-gray-900">${hasTPS ? totalCurrentTPS.toFixed(2) : 'N/A'}</div>
                     <div class="text-xs text-gray-500">${totalCurrentUsers} total users</div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Target Total TPS</label>
-                    <input type="number" id="target-total-tps" value="${totalCurrentTPS.toFixed(2)}" min="0.1" step="0.1"
-                        class="w-full px-3 py-2 border border-gray-300 rounded text-center text-lg focus:ring-2 focus:ring-green-500">
+                    <input type="number" id="target-total-tps" value="${hasTPS ? totalCurrentTPS.toFixed(2) : ''}" min="0.1" step="0.1"
+                        class="w-full px-3 py-2 border border-gray-300 rounded text-center text-lg focus:ring-2 focus:ring-green-500" ${!hasTPS ? 'placeholder="No timers found"' : ''}>
                 </div>
                 <div>
                     <button onclick="calculateScalingFactor()" 
@@ -3718,9 +3724,25 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     
+    // Check file size (Edge has lower memory limits)
+    const maxSize = 10 * 1024 * 1024; // 10MB limit for safety
+    if (file.size > maxSize) {
+        showToast('File too large. Maximum size: 10MB', 'error');
+        return;
+    }
+    
     const reader = new FileReader();
+    
+    // Add error handler for Edge compatibility
+    reader.onerror = function(error) {
+        console.error('FileReader error:', error);
+        showToast('Error reading file: ' + error.message, 'error');
+    };
     reader.onload = function(event) {
         try {
+            // Store raw XML data FIRST
+            window.appState.jmxData = event.target.result;
+            
             const result = parseJMX(event.target.result);
             
             if (result.error) {
@@ -3731,6 +3753,9 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
             // Update global state
             window.appState = { ...window.appState, ...result };
             
+            // Re-store jmxData (important!)
+            window.appState.jmxData = event.target.result;
+            
             // Store original thread group counts for master scaling
             window.appState.originalThreadGroupCounts = result.threadGroupData.map(tg => tg.count);
             
@@ -3739,69 +3764,16 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
             document.getElementById('mainContent').style.display = 'block';
             document.getElementById('downloadBtn').disabled = false;
             
-            // Render initial view
-            try {
-                renderThreadGroupsTable();
-                console.log('✓ Thread groups rendered');
-            } catch (err) {
-                console.error('Error rendering thread groups:', err);
-            }
-            
-            try {
-                renderVariablesTable();
-                console.log('✓ Variables rendered');
-            } catch (err) {
-                console.error('Error rendering variables:', err);
-            }
-            
-            try {
-                renderSamplersTable();
-                console.log('✓ Samplers rendered');
-            } catch (err) {
-                console.error('Error rendering samplers:', err);
-            }
-            
-            try {
-                renderTimersTable();
-                console.log('✓ Timers rendered');
-            } catch (err) {
-                console.error('Error rendering timers:', err);
-            }
-            
-            try {
-                populateTimerDropdowns();
-                console.log('✓ Timer dropdowns populated');
-            } catch (err) {
-                console.error('Error populating timer dropdowns:', err);
-            }
-            
-            try {
-                renderCSVTable();
-                console.log('✓ CSV rendered');
-            } catch (err) {
-                console.error('Error rendering CSV:', err);
-            }
-            
-            try {
-                renderScalingTable();
-                console.log('✓ Scaling table rendered');
-            } catch (err) {
-                console.error('Error rendering scaling table:', err);
-            }
-            
-            try {
-                renderWorkloadTable();
-                console.log('✓ Workload table rendered');
-            } catch (err) {
-                console.error('Error rendering workload table:', err);
-            }
-            
-            try {
-                updatePerformanceSummary();
-                console.log('✓ Performance summary updated');
-            } catch (err) {
-                console.error('Error updating performance summary:', err);
-            }
+            // Render all tables
+            renderThreadGroupsTable();
+            renderVariablesTable();
+            renderSamplersTable();
+            renderTimersTable();
+            populateTimerDropdowns();
+            renderCSVTable();
+            renderScalingTable();
+            renderWorkloadTable();
+            updatePerformanceSummary();
             
             showToast('JMX loaded successfully!', 'success');
         } catch (error) {
@@ -4649,15 +4621,31 @@ window.updatePerformanceSummary = updatePerformanceSummary;
 window.renderScalingTable = renderScalingTable;
 window.renderWorkloadTable = renderWorkloadTable;
 window.setMasterScale = setMasterScale;
+
+// Capture the imported function reference before creating window function
+const applyMasterScaleImpl = applyMasterScale;
+
 window.applyMasterScale = function() {
-    const result = applyMasterScaling();
+    const result = applyMasterScaleImpl();
     if (!result.success) {
-        showToast(result.error, 'error');
+        window.showToast(result.error, 'error');
         return;
     }
+    
+    // Show visual confirmation badge
+    const badge = document.getElementById('scalingAppliedBadge');
+    if (badge) {
+        badge.style.display = 'block';
+        // Hide after 5 seconds
+        setTimeout(() => {
+            badge.style.display = 'none';
+        }, 5000);
+    }
+    
+    // Re-render Thread Groups table with updated counts
     renderThreadGroupsTable();
     updatePerformanceSummary();
-    showToast(`Applied master scale successfully!`, 'success');
+    window.showToast(`Applied ${document.getElementById('masterScale').value}% scaling`, 'success');
 };
 
 // Workload Calculator Mode Switcher

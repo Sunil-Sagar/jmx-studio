@@ -63,18 +63,17 @@ export function calculatePerformanceSummary() {
     // Apply slave multiplier
     scaledUsers *= slaveCount;
 
-    // Calculate TPS (simplified - would need precise throughput controller analysis)
-    // For now, assume TPS scales linearly with users
+    // Calculate TPS (0 if no timers found)
     const originalTPS = calculateTPS();
-    const scaledTPS = originalTPS * scaleMultiplier * slaveCount;
+    const scaledTPS = originalTPS > 0 ? (originalTPS * scaleMultiplier * slaveCount) : 0;
 
     return {
         activeGroups,
         totalGroups,
         originalUsers,
         scaledUsers,
-        originalTPS: originalTPS.toFixed(2),
-        scaledTPS: scaledTPS.toFixed(2)
+        originalTPS: originalTPS > 0 ? originalTPS.toFixed(2) : 'N/A',
+        scaledTPS: scaledTPS > 0 ? scaledTPS.toFixed(2) : 'N/A'
     };
 }
 
@@ -122,13 +121,7 @@ function calculateTPS() {
         }
     }
 
-    // If no timers found, estimate based on users and avg response time
-    if (totalTPS === 0) {
-        const summary = calculateBasicMetrics();
-        // Assume 1 second avg response time, users / response time = TPS
-        totalTPS = summary.originalUsers / 1;
-    }
-
+    // If no timers found, return 0 to display N/A
     return totalTPS;
 }
 
@@ -194,57 +187,70 @@ export function applyMasterScale() {
         return { success: false, error: 'Invalid scale percentage' };
     }
 
-    const threadGroups = jmxDoc.getElementsByTagName('ThreadGroup');
+    const threadGroups = window.appState.threadGroupData || [];
     const originalCounts = window.appState.originalThreadGroupCounts || [];
     let scaledCount = 0;
 
-    // Scale all enabled thread groups
-    for (let i = 0; i < threadGroups.length; i++) {
-        const tg = threadGroups[i];
-        const enabled = tg.getAttribute('enabled') !== 'false';
+    try {
+        // Parse XML once (Edge-safe)
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(window.appState.jmxData, 'text/xml');
         
-        if (enabled) {
-            // Scale num_threads in XML using ORIGINAL count as baseline
-            // Check both intProp and stringProp
-            let propElement = null;
-            const intProps = tg.getElementsByTagName('intProp');
-            for (let j = 0; j < intProps.length; j++) {
-                if (intProps[j].getAttribute('name') === 'ThreadGroup.num_threads') {
-                    propElement = intProps[j];
-                    break;
-                }
-            }
-            if (!propElement) {
-                const stringProps = tg.getElementsByTagName('stringProp');
-                for (let j = 0; j < stringProps.length; j++) {
-                    if (stringProps[j].getAttribute('name') === 'ThreadGroup.num_threads') {
-                        propElement = stringProps[j];
-                        break;
-                    }
-                }
-            }
+        // Check for parse errors (Edge compatibility)
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) {
+            throw new Error('XML parsing failed');
+        }
+        
+        const allThreadGroups = xmlDoc.querySelectorAll('ThreadGroup, com.blazemeter.jmeter.threads.concurrency.ConcurrencyThreadGroup, com.octoperf.jmeter.OctoPerfThreadGroup');
+
+    // Update both XML document and threadGroupData
+    threadGroups.forEach((tg, index) => {
+        if (tg.status) { // Only scale enabled thread groups
+            // Use original count as baseline
+            const originalUsers = originalCounts[index];
+            const scaledUsers = Math.max(1, Math.round(originalUsers * scaleMultiplier));
             
-            if (propElement) {
-                // Use original count from when file was loaded
-                const originalUsers = originalCounts[i] || parseInt(propElement.textContent) || 0;
-                const scaledUsers = Math.max(1, Math.round(originalUsers * scaleMultiplier));
-                propElement.textContent = scaledUsers.toString();
+            // Update threadGroupData in appState directly
+            tg.count = scaledUsers;
+            window.appState.threadGroupData[index].count = scaledUsers;
+            
+            // Update XML element
+            if (index < allThreadGroups.length) {
+                const tgElement = allThreadGroups[index];
                 
-                // Also update in appState.threadGroupData
-                if (window.appState.threadGroupData && window.appState.threadGroupData[i]) {
-                    window.appState.threadGroupData[i].count = scaledUsers;
+                // Update standard ThreadGroup
+                const numThreadsElement = tgElement.querySelector('stringProp[name="ThreadGroup.num_threads"], intProp[name="ThreadGroup.num_threads"]');
+                if (numThreadsElement) {
+                    numThreadsElement.textContent = scaledUsers.toString();
+                }
+                
+                // Update ConcurrencyThreadGroup
+                const targetLevelElement = tgElement.querySelector('stringProp[name="TargetLevel"]');
+                if (targetLevelElement) {
+                    targetLevelElement.textContent = scaledUsers.toString();
                 }
                 
                 scaledCount++;
             }
         }
-    }
+    });
+    
+    // Serialize once after all updates (Edge-safe)
+    const serializer = new XMLSerializer();
+    window.appState.jmxData = serializer.serializeToString(xmlDoc);
+    window.appState.jmxDocument = xmlDoc;
 
     // Update performance summary
     updatePerformanceSummary();
 
-    showToast(`Scaled ${scaledCount} thread groups by ${masterScale}%`, 'success');
     return { success: true, scaledCount };
+    
+    } catch (error) {
+        console.error('Error in applyMasterScale:', error);
+        showToast('Error applying scaling: ' + error.message, 'error');
+        return { success: false, error: error.message };
+    }
 }
 
 export function setMasterScale(percentage) {
