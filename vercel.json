@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "dist/jmx-studio.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/dist/jmx-studio.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/dist/jmx-studio.html"
+    }
+  ]
+}
